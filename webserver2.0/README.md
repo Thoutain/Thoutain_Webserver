@@ -1,1 +1,6 @@
-#### webserver更新
+# webserver更新
+
+## 功能
+* 利用单例模式与阻塞队列实现异步的日志系统。记录服务器运行状态 blockqueue.h
+
+
