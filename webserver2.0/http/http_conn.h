@@ -29,13 +29,17 @@
 class http_conn{
 public:
     // 读取文件长度上限
+    // 设置读取文件的名称m_real_file大小
     static const int FILENAME_LEN = 200;
 	// 读缓存大小
+    // 设置读缓冲区m_read_buf大小
     static const int READ_BUFFER_SIZE = 2048;
 	// 写缓存大小
+    // 设置写缓冲区m_write_buf大小
     static const int WRITE_BUFFER_SIZE = 1024;
 	// HTTP方法名
     // enum默认从0开始
+    // 报文的请求方法，本项目只用到GET和POST
     enum METHOD
     {
         GET = 0,
@@ -49,30 +53,33 @@ public:
         PATH
     };
 	// 主状态机状态，检查请求报文中元素
+    // 主状态机的状态
     enum CHECK_STATE
     {
-        CHECK_STATE_REQUESTLINE = 0,
-        CHECK_STATE_HEADER,
-        CHECK_STATE_CONTENT
+        CHECK_STATE_REQUESTLINE = 0,  // 解析请求i行
+        CHECK_STATE_HEADER,  // 解析请求头
+        CHECK_STATE_CONTENT  // 解析消息体，仅用于解析POST请求
     };
 	// HTTP状态码
+    // 报文解析的结果
     enum HTTP_CODE
     {
-        NO_REQUEST,
-        GET_REQUEST,
-        BAD_REQUEST,
+        NO_REQUEST, // 请求不完整，需要继续请求读取报文数据
+        GET_REQUEST,// 获得了完整的HTTP请求
+        BAD_REQUEST,// HTTP请求报文有语法错误
         NO_RESOURCE,
         FORBIDDEN_REQUEST,
         FILE_REQUEST,
-        INTERNAL_ERROR,
+        INTERNAL_ERROR,// 服务器内部错误，该结果在主状态机逻辑switch的default下，一般不会触发
         CLOSED_CONNECTION
     };
 	// 从状态机的状态，文本解析是否成功
+    // 从状态机的状态
     enum LINE_STATUS
     {
-        LINE_OK = 0,
-        LINE_BAD,
-        LINE_OPEN
+        LINE_OK = 0,  // 完整读取一行
+        LINE_BAD,  // 报文语法有误
+        LINE_OPEN  // 读取的行不完整
     };
 
 public:
@@ -80,13 +87,13 @@ public:
     ~http_conn() {}
 
 public:
-	// 初始化套接字
+	// 初始化套接字地址，函数内部会调用私有方法init
     void init(int sockfd, const sockaddr_in &addr, char *, int, int, string user, string passwd, string sqlname);
 	// 关闭HTTP连接
     void close_conn(bool real_close = true);
 	// http处理函数
     void process();
-	// 读取浏览器发送的数据
+	// 读取浏览器发送来的全部数据
     bool read_once();
 	// 给相应报文中写入数据
     bool write();
@@ -95,6 +102,7 @@ public:
         return &m_address;
     }
 	// 初始化数据库读取线程
+    // 同步线程初始化数据库读取表
     void initmysql_result(connection_pool *connPool);
 	// 时间事件类型
     int timer_flag;
@@ -120,7 +128,7 @@ private:
     char *get_line() { return m_read_buf + m_start_line; };
 	// 从状态机读取一行，分析是请求报文的哪一部分
     LINE_STATUS parse_line();
-	// 之后重点介绍**
+	// 重点
     void unmap();
 	// 根据响应报文格式，生成对应8个部分，以下函数均由do_request调用
     bool add_response(const char *format, ...);
@@ -165,17 +173,17 @@ private:
     char *m_host;
     int m_content_length;
     bool m_linger;
-	//读取服务器上的文件地址
+	// 读取服务器上的文件地址
     char *m_file_address;
     struct stat m_file_stat;
-	//io向量机制iovec      ？？？
+	// io向量机制iovec      ？？？
     struct iovec m_iv[2];
     int m_iv_count;
-    int cgi;        //是否启用的POST
-    char *m_string; //存储请求头数据
-	 //剩余发送字节数
+    int cgi;        // 是否启用的POST
+    char *m_string; // 存储请求头数据
+	// 剩余发送字节数
     int bytes_to_send;
-	//已发送字节数
+	// 已发送字节数
     int bytes_have_send;
     char *doc_root;
 

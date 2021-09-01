@@ -196,7 +196,7 @@ http_conn::LINE_STATUS http_conn::parse_line()
 }
 
 // 循环读取客户数据，直到无数据可读或对方关闭连接
-// 非阻塞ET工作模式下，需要一次性将数据读完
+// 非阻塞ET工作模式下，需要一次性将数据读完。读取到m_read_buffer中，并更新m_read_idx
 bool http_conn::read_once()
 {
     if (m_read_idx >= READ_BUFFER_SIZE)
@@ -384,19 +384,29 @@ http_conn::HTTP_CODE http_conn::parse_content(char *text)
 // 有限状态机处理请求报文
 http_conn::HTTP_CODE http_conn::process_read()
 {
+    //初始化从状态机状态、HTTP请求解析结果
     LINE_STATUS line_status = LINE_OK;
     HTTP_CODE ret = NO_REQUEST;
     char *text = 0;
 
+    //这里为什么要写两个判断条件？第一个判断条件为什么这样写？
+    //具体的在主状态机逻辑中会讲解。
+    //parse_line为从状态机的具体实现
     while ((m_check_state == CHECK_STATE_CONTENT && line_status == LINE_OK) || ((line_status = parse_line()) == LINE_OK))
     {
         text = get_line();
+
+        //m_start_line是每一个数据行在m_read_buf中的起始位置
+        //m_checked_idx表示从状态机在m_read_buf中读取的位置
         m_start_line = m_checked_idx;
+
+        //主状态机的三种状态转移逻辑
         LOG_INFO("%s", text);
         switch (m_check_state)
         {
         case CHECK_STATE_REQUESTLINE:
         {
+            //解析请求行
             ret = parse_request_line(text);
             if (ret == BAD_REQUEST)
                 return BAD_REQUEST;
@@ -404,9 +414,11 @@ http_conn::HTTP_CODE http_conn::process_read()
         }
         case CHECK_STATE_HEADER:
         {
+            //解析请求头
             ret = parse_headers(text);
             if (ret == BAD_REQUEST)
                 return BAD_REQUEST;
+            //完整解析GET请求后，跳转到报文响应函数
             else if (ret == GET_REQUEST)
             {
                 return do_request();
@@ -415,9 +427,12 @@ http_conn::HTTP_CODE http_conn::process_read()
         }
         case CHECK_STATE_CONTENT:
         {
+            //解析消息体
             ret = parse_content(text);
+            //完整解析POST请求后，跳转到报文响应函数
             if (ret == GET_REQUEST)
                 return do_request();
+            //解析完消息体即完成报文解析，避免再次进入循环，更新line_status
             line_status = LINE_OPEN;
             break;
         }
@@ -784,8 +799,9 @@ bool http_conn::process_write(HTTP_CODE ret)
 // 处理http报文请求与报文响应
 void http_conn::process()
 {
-    // NO_REQUEST，表示请求不完整，需要继续接收请求数据
     HTTP_CODE read_ret = process_read();
+
+    // NO_REQUEST，表示请求不完整，需要继续接收请求数据
     if (read_ret == NO_REQUEST)
     {
         // 注册并监听读事件

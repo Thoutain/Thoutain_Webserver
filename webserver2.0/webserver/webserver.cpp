@@ -150,12 +150,17 @@ void WebServer::eventListen()
     utils.addfd(m_epollfd, m_listenfd, false, m_LISTENTrigmode);
     http_conn::m_epollfd = m_epollfd;
 
+    // 创建管道套接字
     ret = socketpair(PF_UNIX, SOCK_STREAM, 0, m_pipefd);
     assert(ret != -1);
+
+    // 设置管道写端为非阻塞
     utils.setnonblocking(m_pipefd[1]);
+    // 设置管道读端为ET非阻塞
     utils.addfd(m_epollfd, m_pipefd[0], false, 0);
 
     utils.addsig(SIGPIPE, SIG_IGN);
+    // 传递给主循环的信号值，这里只关注SIGALRM和SIGTERM
     utils.addsig(SIGALRM, utils.sig_handler, false);
     utils.addsig(SIGTERM, utils.sig_handler, false);
 

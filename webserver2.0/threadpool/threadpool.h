@@ -15,17 +15,19 @@ public:
      * @brief Construct a new threadpool object
      * 
      * @param actor_model 
-     * @param connPool 
+     * @param connPool 数据库连接池指针
      * @param thread_number 线程池中线程的数量
      * @param max_request 请求队列中最多允许的、等待处理的请求的数量
      */
     threadpool(int actor_model, connection_pool *connPool, int thread_number = 8, int max_request = 10000);
     ~threadpool();
     bool append(T *request, int state);
+    // 向请求队列中插入任务请求
     bool append_p(T *request);
 
 private:
     /*工作线程运行的函数，它不断从工作队列中取出任务并执行*/
+    // 这里static主要是为了类型匹配
     static void *worker(void *arg); // why static???    class specific
     void run();
 
@@ -48,12 +50,14 @@ threadpool<T>::threadpool(int actor_model, connection_pool *connPool, int thread
         if (thread_number <= 0 || max_requests <= 0)
             throw std::exception();
         
+        // 线程id初始化
         m_threads = new pthread_t[m_thread_number];  // pthreat_t 是长整型
 
         if (!m_threads)
             throw std::exception();
 
         for (int i = 0; i < thread_number; ++ i){
+            // 循环创建线程,并将工作线程按要求进行运行
             // 函数原型中的第三个参数，为函数指针，指向处理线程函数的地址
             // 若线程函数为类成员函数 则this指针会作为默认的参数被传进函数中，从而和线程函数参数(void *)不能匹配，不能通过编译
             // 静态成员函数就没有这个问题，因为里面没有this指针
@@ -63,6 +67,7 @@ threadpool<T>::threadpool(int actor_model, connection_pool *connPool, int thread
                 throw std::exception();
             }
 
+            // 将线程进行分离后，不用单独对工作线程进行回收
             // 主要是将线程属性更改为unjoinable，使得主线程分离，便于资源的释放
             if (pthread_detach(m_threads[i])){
 
@@ -84,6 +89,7 @@ template<typename T>
 bool threadpool<T>::append(T *request, int state){
 
     m_queuelocker.lock();
+    // 根据硬件，预先设置请求队列的最大值
     if (m_workqueue.size() >= m_max_requests){
 
         m_queuelocker.unlock();
@@ -92,8 +98,12 @@ bool threadpool<T>::append(T *request, int state){
 
     // 读写事件
     request->m_state = state; // ??做什么的
+
+    // 添加任务
     m_workqueue.push_back(request);
     m_queuelocker.unlock();
+
+    // 信号量提醒有任务要处理
     m_queuestat.post();
     return true;
 }
@@ -117,11 +127,14 @@ bool threadpool<T>::append_p(T *request){
 }
 
 // 工作线程  创建线程的时候需要调用
+// 线程处理函数
+// 内部访问私有成员函数run()，完成线程处理要求
 template <typename T>
 void *threadpool<T>::worker(void *arg){
 
     // 调用的时候 *arg是this！
     // 所以该操作其实是获取threadpool对象地址
+    // 将参数强制转化为线程池类，调用成员方法
     threadpool *pool = (threadpool *)arg;
     // 线程池中每一个线程创建时都会调用run(),睡眠在队列中
     // 怎么睡眠的？？？
@@ -135,7 +148,10 @@ void threadpool<T>::run(){
 
     while (true) {
 
+        // 信号量等待
         m_queuestat.wait();
+
+        // 被唤醒后先加互斥锁
         m_queuelocker.lock();
         if (m_workqueue.empty()){
 
@@ -143,7 +159,8 @@ void threadpool<T>::run(){
             continue;
         }
 
-        // 
+        // 从请求队列中取出第一个任务
+        // 将任务从请求队列删除
         T *request = m_workqueue.front();
         m_workqueue.pop_front();
         m_queuelocker.unlock();

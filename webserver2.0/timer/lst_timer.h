@@ -24,12 +24,19 @@
 #include <time.h>
 #include "../log/log.h"
 
+// 连接资源结构体成员需要用到定时器类
+// 需要前向声明
 class util_timer;
 
+// 连接资源
 struct client_data{
-
+    // 客户端socket地址
     sockaddr_in address;
+
+    // socket文件描述符
     int sockfd;
+
+    // 定时器
     util_timer *timer;
 };
 
@@ -55,6 +62,7 @@ public:
 class sort_timer_lst{
 public:
     sort_timer_lst();
+    // 常规销毁链表
     ~sort_timer_lst();
 
     // 添加定时器,内部调用私有成员add_timer
@@ -108,4 +116,4 @@ public:
 
 void cb_func(client_data *user_data);
 
-#endif
+#endifsocketpair
